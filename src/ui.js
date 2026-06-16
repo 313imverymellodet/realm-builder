@@ -6,6 +6,7 @@ const RES_LIST = ['food', 'wood', 'stone', 'gold'];
 
 let handlers;
 let selectedId = null;
+let difficulty = 'normal';
 const buildCards = {};
 
 export function initUI(h) {
@@ -13,7 +14,7 @@ export function initUI(h) {
   buildResourceBar();
   buildBuildBar();
   wireButtons();
-  return { refresh, toast, showSelection, hideSelection, showWin, showIntro, hideIntro, setPlacing };
+  return { refresh, toast, showSelection, hideSelection, showWin, showDefeat, showIntro, hideIntro, setPlacing, updateRival };
 }
 
 function buildResourceBar() {
@@ -49,9 +50,21 @@ function wireButtons() {
   $('#btn-age').addEventListener('click', () => handlers.onAdvanceAge());
   $('#btn-save').addEventListener('click', () => handlers.onSave());
   $('#btn-reset').addEventListener('click', () => handlers.onReset());
+  $('#btn-rival').addEventListener('click', () => handlers.onViewRival());
   $('#sel-close').addEventListener('click', () => handlers.onCloseSel());
   $('#sel-upgrade').addEventListener('click', () => { if (selectedId != null) handlers.onUpgrade(selectedId); });
   $('#sel-demolish').addEventListener('click', () => { if (selectedId != null) handlers.onDemolish(selectedId); });
+}
+
+// ---------- rival race panel ----------
+export function updateRival(p) {
+  $('#rp-fill').style.width = Math.round(p.pct * 100) + '%';
+  let status;
+  if (p.wonderLevel >= 3) status = '🏆 Wonder complete';
+  else if (p.wonderLevel > 0) status = `🏆 Building Wonder · Lv ${p.wonderLevel}/3`;
+  else status = `${p.age >= 2 ? 'Age II' : 'Age I'} · ${p.builds} building${p.builds === 1 ? '' : 's'}`;
+  $('#rp-status').textContent = status;
+  $('#rivalpanel').classList.toggle('danger', p.wonderLevel > 0);
 }
 
 export function refresh() {
@@ -147,31 +160,54 @@ export function setPlacing(on, name) {
 export function showWin() {
   showModal(
     `<h1>🏆 Your Wonder is Complete!</h1>
-     <p>You grew a lone Town Center into a thriving realm and crowned it with a Wonder for the ages. Masterfully done.</p>
+     <p>You beat your rival to the Wonder and crowned a realm for the ages. Masterfully done.</p>
      <div class="m-btns"><button class="big" id="m-again">Build a New Realm</button></div>`
   );
   $('#m-again').addEventListener('click', () => { hideModal(); handlers.onReset(); });
 }
 
+export function showDefeat() {
+  showModal(
+    `<h1>💀 Your Rival Won the Race</h1>
+     <p>The rival realm completed its Wonder before you did. Grow faster, defend smarter, and try again.</p>
+     <div class="m-btns"><button class="big" id="m-again">Try Again</button></div>`
+  );
+  $('#m-again').addEventListener('click', () => { hideModal(); handlers.onReset(); });
+}
+
 export function showIntro(hasSave) {
+  const diffs = [
+    ['easy', 'Easy', 'relaxed rival'],
+    ['normal', 'Normal', 'a real race'],
+    ['hard', 'Hard', 'ruthless rival'],
+  ];
   showModal(
     `<h1>🏰 Realm Builder</h1>
-     <p>Grow a fantasy settlement: gather resources, house your people, and defend against raids.</p>
+     <p>Race a rival realm across the river to build a 🏆 <b>Wonder</b> first. Gather resources, house your people, and defend against raids.</p>
      <ul>
        <li><b>Build</b> from the bar at the bottom, then <b>click the ground</b> to place.</li>
        <li><b>Click a building</b> to upgrade or demolish it.</li>
        <li>Houses raise 👥 population; people <b>work</b> your farms, camps and mines (watch the 👷 staffing %).</li>
        <li>Build a ✨ <b>Temple</b>, reach <b>${game.AGE2_POP}</b> population, then <b>Advance the Age</b>.</li>
        <li>Keep your ⚔️ <b>Might</b> up — raiders come periodically.</li>
-       <li><b>Goal:</b> build the 🏆 <b>Wonder</b> and upgrade it to Level 3.</li>
+       <li><b>Win</b> by finishing your Wonder (to Level 3) before the rival finishes theirs.</li>
      </ul>
+     <div class="diffrow" id="diffrow">
+       ${diffs.map(([k, label, sub]) => `<button class="diff${k === difficulty ? ' on' : ''}" data-diff="${k}"><b>${label}</b><span>${sub}</span></button>`).join('')}
+     </div>
      <p class="ctrls">Drag to rotate · scroll to zoom · right-drag to pan</p>
      <div class="m-btns">
        <button class="big" id="m-new">New Settlement</button>
        ${hasSave ? '<button class="big alt" id="m-cont">Continue Saved</button>' : ''}
      </div>`
   );
-  $('#m-new').addEventListener('click', () => { hideModal(); handlers.onStart(false); });
+  $('#diffrow').querySelectorAll('.diff').forEach((b) => {
+    b.addEventListener('click', () => {
+      difficulty = b.dataset.diff;
+      $('#diffrow').querySelectorAll('.diff').forEach((x) => x.classList.toggle('on', x === b));
+    });
+  });
+  $('#m-new').addEventListener('click', () => { hideModal(); handlers.onStart(false, difficulty); });
   if (hasSave) $('#m-cont').addEventListener('click', () => { hideModal(); handlers.onStart(true); });
 }
 export function hideIntro() { hideModal(); }

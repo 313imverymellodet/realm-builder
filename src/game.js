@@ -11,15 +11,18 @@ const START = () => ({
   nextRaid: 75,
   raidWarned: false,
   raidCount: 0,
+  difficulty: 'normal',
   won: false,
+  lost: false,
 });
 
 export const state = START();
 
-// Hooks set by main.js (bridge to world + ui).
+// Hooks set by main.js (bridge to world + ui + rival).
 export const hooks = {
   spawn: () => {}, swap: () => {}, remove: () => {}, clearWorld: () => {},
   onToast: () => {}, onWin: () => {}, onChange: () => {},
+  serializeRival: () => null, restoreRival: () => {},
 };
 
 const BASE_CAP = { food: 300, wood: 350, stone: 300, gold: 300 };
@@ -138,8 +141,14 @@ export function advanceAge() {
 }
 
 // ---------- per-frame economy ----------
+// Called when the rival finishes its Wonder first.
+export function markLost() {
+  if (state.won || state.lost) return;
+  state.lost = true;
+}
+
 export function tick(dt) {
-  if (state.won) return;
+  if (state.won || state.lost) return;
   state.tElapsed += dt;
   const eff = efficiency();
   const happyMult = 1 + Math.min(0.5, happiness() / 100);
@@ -207,8 +216,9 @@ export function buildingInfo(id) {
 }
 
 // ---------- lifecycle ----------
-export function startNew() {
+export function startNew(difficulty = 'normal') {
   Object.assign(state, START());
+  state.difficulty = difficulty;
   hooks.clearWorld();
   const f = BUILDINGS.towncenter.footprint;
   const c = Math.floor(GRID_N / 2 - f / 2);
@@ -227,17 +237,22 @@ function rebuildWorld() {
 const SAVE_KEY = 'fantasy-rts-save';
 export function hasSave() { return !!localStorage.getItem(SAVE_KEY); }
 export function save() {
-  localStorage.setItem(SAVE_KEY, JSON.stringify(state));
+  localStorage.setItem(SAVE_KEY, JSON.stringify({ ...state, rival: hooks.serializeRival() }));
   hooks.onToast('Realm saved', 'ok');
 }
 export function load() {
   const raw = localStorage.getItem(SAVE_KEY);
   if (!raw) return false;
-  try { Object.assign(state, START(), JSON.parse(raw)); }
-  catch { hooks.onToast('Saved game was corrupt', 'bad'); return false; }
+  let rival = null;
+  try {
+    const { rival: r, ...rest } = JSON.parse(raw);
+    rival = r;
+    Object.assign(state, START(), rest);
+  } catch { hooks.onToast('Saved game was corrupt', 'bad'); return false; }
   rebuildWorld();
+  hooks.restoreRival(rival, state.difficulty);
   hooks.onChange();
   hooks.onToast('Realm loaded', 'ok');
   return true;
 }
-export function reset() { localStorage.removeItem(SAVE_KEY); startNew(); }
+export function reset() { localStorage.removeItem(SAVE_KEY); startNew(state.difficulty); }

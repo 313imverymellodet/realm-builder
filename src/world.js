@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { makeInstance, makeGhost } from './assets.js';
-import { GRID_N, CELL } from './config.js';
+import { GRID_N, CELL, RIVAL_CENTER } from './config.js';
 
 const ORIGIN = -GRID_N * CELL / 2;
 
@@ -10,8 +10,15 @@ let buildingsGroup, highlight;
 const occupied = new Map();   // "cx,cz" -> id
 const instances = new Map();  // id -> { group, footprint, cx, cz, cells, modelName, rot }
 
+let rivalGroup;
+const rivalMap = new Map();    // key -> { group, modelName }
+
 let ghost = null, ghostFootprint = 1, ghostRot = 0, placingType = null;
 let ghostState = { valid: false, cx: 0, cz: 0 };
+
+// Camera focus tween (used to fly between your realm and the rival's).
+let focusStart = null, focusGoal = null, focusT = 1;
+const camOffset = new THREE.Vector3();
 
 // Hooks set by main.js
 export const hooks = {
@@ -31,16 +38,16 @@ export function initWorld(canvas) {
 
   scene = new THREE.Scene();
   scene.background = new THREE.Color('#9fd3e8');
-  scene.fog = new THREE.Fog('#9fd3e8', 120, 260);
+  scene.fog = new THREE.Fog('#9fd3e8', 200, 520);
 
-  camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 700);
+  camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 900);
   camera.position.set(46, 48, 46);
 
   controls = new OrbitControls(camera, canvas);
   controls.enableDamping = true;
   controls.maxPolarAngle = Math.PI / 2.3;
   controls.minDistance = 16;
-  controls.maxDistance = 170;
+  controls.maxDistance = 260;
   controls.target.set(0, 0, 0);
   controls.mouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN };
 
@@ -76,6 +83,28 @@ export function initWorld(canvas) {
   grid.position.y = 0.02;
   grid.material.opacity = 0.4; grid.material.transparent = true;
   scene.add(grid);
+
+  // ---- rival realm to the north (drier, "enemy" ground) ----
+  const rivalGround = new THREE.Mesh(
+    new THREE.PlaneGeometry(120, 120),
+    new THREE.MeshStandardMaterial({ color: '#a98a52' })
+  );
+  rivalGround.rotation.x = -Math.PI / 2;
+  rivalGround.position.set(RIVAL_CENTER.x, -0.02, RIVAL_CENTER.z);
+  rivalGround.receiveShadow = true;
+  scene.add(rivalGround);
+
+  // ---- river separating the two realms ----
+  const river = new THREE.Mesh(
+    new THREE.PlaneGeometry(420, 34),
+    new THREE.MeshStandardMaterial({ color: '#3f86c4', metalness: 0.1, roughness: 0.4, transparent: true, opacity: 0.9 })
+  );
+  river.rotation.x = -Math.PI / 2;
+  river.position.set(0, -0.04, -80);
+  scene.add(river);
+
+  rivalGroup = new THREE.Group();
+  scene.add(rivalGroup);
 
   buildingsGroup = new THREE.Group();
   scene.add(buildingsGroup);
@@ -219,6 +248,33 @@ export function clearWorld() {
   cancelPlacing();
 }
 
+// ---------- rival realm (non-interactive: cannot be selected) ----------
+// Doubles as both spawn and swap: claims the slot by modelName so the last
+// requested model wins even if loads resolve out of order.
+export async function spawnRival(rkey, modelName, size, x, z) {
+  let rec = rivalMap.get(rkey);
+  if (rec) { rec.modelName = modelName; } else { rec = { group: null, modelName }; rivalMap.set(rkey, rec); }
+  const inst = await makeInstance(modelName, size);
+  const cur = rivalMap.get(rkey);
+  if (!cur || cur.modelName !== modelName) return; // superseded or cleared while loading
+  inst.position.set(x, 0, z);
+  if (cur.group) rivalGroup.remove(cur.group);
+  cur.group = inst;
+  rivalGroup.add(inst);
+}
+export function clearRival() {
+  for (const [, rec] of rivalMap) if (rec.group) rivalGroup.remove(rec.group);
+  rivalMap.clear();
+}
+
+// ---------- camera focus ----------
+export function focusOn(x, z) {
+  focusStart = controls.target.clone();
+  focusGoal = new THREE.Vector3(x, 0, z);
+  camOffset.copy(camera.position).sub(controls.target);
+  focusT = 0;
+}
+
 // ---------- selection ----------
 function showHighlight(id) {
   const rec = instances.get(id);
@@ -265,5 +321,16 @@ function setupInput() {
 }
 
 // ---------- frame ----------
-export function render() { controls.update(); renderer.render(scene, camera); }
+export function render(dt = 0) {
+  if (focusGoal && focusT < 1) {
+    focusT = Math.min(1, focusT + dt * 1.5);
+    const e = focusT < 0.5 ? 2 * focusT * focusT : 1 - Math.pow(-2 * focusT + 2, 2) / 2; // easeInOut
+    const p = focusStart.clone().lerp(focusGoal, e);
+    controls.target.copy(p);
+    camera.position.copy(p).add(camOffset);
+    if (focusT >= 1) focusGoal = null;
+  }
+  controls.update();
+  renderer.render(scene, camera);
+}
 export function getDelta() { return Math.min(clock.getDelta(), 0.25); }
