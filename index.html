@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Realm Builder</title>
+  </head>
+  <body>
+    <canvas id="app"></canvas>
+
+    <!-- Top resource bar -->
+    <div id="topbar">
+      <div id="resbar"></div>
+      <div id="topbtns">
+        <button id="btn-age" class="tbtn gold">⚜️ Advance Age</button>
+        <button id="btn-save" class="tbtn">💾 Save</button>
+        <button id="btn-reset" class="tbtn">🔄 New</button>
+      </div>
+    </div>
+
+    <!-- Selection panel -->
+    <aside id="selpanel">
+      <button id="sel-close" title="Close">✕</button>
+      <div class="sel-head"><span id="sel-icon">🏛️</span>
+        <div><div id="sel-name">Building</div><div id="sel-level" class="muted">Level 1 / 3</div></div>
+      </div>
+      <div id="sel-stats" class="sel-stats"></div>
+      <button id="sel-upgrade" class="sel-btn up">Upgrade</button>
+      <button id="sel-demolish" class="sel-btn dn">Demolish</button>
+    </aside>
+
+    <!-- Build bar -->
+    <div id="buildbar"></div>
+
+    <!-- Placement hint -->
+    <div id="placehint"></div>
+
+    <!-- Toasts -->
+    <div id="toasts"></div>
+
+    <!-- Modal (intro / win) -->
+    <div id="modal"><div id="modal-content"></div></div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
