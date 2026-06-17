@@ -10,8 +10,10 @@ let buildingsGroup, highlight;
 const occupied = new Map();   // "cx,cz" -> id
 const instances = new Map();  // id -> { group, footprint, cx, cz, cells, modelName, rot }
 
-let rivalGroup, decorGroup;
+let rivalGroup, decorGroup, unitsGroup;
 const rivalMap = new Map();    // key -> { group, modelName }
+
+export function getUnitsGroup() { return unitsGroup; }
 
 let ghost = null, ghostFootprint = 1, ghostRot = 0, placingType = null;
 let ghostState = { valid: false, cx: 0, cz: 0 };
@@ -136,6 +138,9 @@ export function initWorld(canvas) {
   decorGroup = new THREE.Group();
   scene.add(decorGroup);
   scatterDecor();
+
+  unitsGroup = new THREE.Group();
+  scene.add(unitsGroup);
 
   buildingsGroup = new THREE.Group();
   scene.add(buildingsGroup);
@@ -279,6 +284,14 @@ export function clearWorld() {
   occupied.clear();
   hideHighlight();
   cancelPlacing();
+}
+
+// World-space center of a placed building (for positioning units near it).
+export function buildingWorldPos(id) {
+  const rec = instances.get(id);
+  if (!rec) return null;
+  const c = centerWorld(rec.cx, rec.cz, rec.footprint);
+  return { x: c.x, z: c.z };
 }
 
 // ---------- rival realm (non-interactive: cannot be selected) ----------

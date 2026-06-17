@@ -192,7 +192,7 @@ export function showIntro(hasSave) {
        <li><b>Click a building</b> to upgrade or demolish it.</li>
        <li>Houses raise 👥 population; people <b>work</b> your farms, camps and mines (watch the 👷 staffing %).</li>
        <li>Build a ✨ <b>Temple</b>, reach <b>${game.AGE2_POP}</b> population, then <b>Advance the Age</b>.</li>
-       <li>Keep your ⚔️ <b>Might</b> up — raiders come periodically.</li>
+       <li>🏠 People wander your town; ⚔️ <b>Barracks & Watchtowers</b> post soldiers who fight off the skeleton raids that cross the river.</li>
        <li><b>Win</b> by finishing your Wonder (to Level 3) before the rival finishes theirs.</li>
      </ul>
      <div class="diffrow" id="diffrow">

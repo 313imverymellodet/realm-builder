@@ -3,12 +3,15 @@ import * as world from './world.js';
 import * as game from './game.js';
 import * as rival from './rival.js';
 import * as audio from './audio.js';
+import * as units from './units.js';
+import * as war from './war.js';
 import { initUI } from './ui.js';
 import { BUILDINGS, BUILD_ORDER, modelFor, footprintOf } from './buildings.js';
 import { RIVAL_CENTER } from './config.js';
 
 const canvas = document.getElementById('app');
 world.initWorld(canvas);
+units.initUnits(world.getUnitsGroup());
 
 let started = false;
 let gameOver = false;
@@ -29,8 +32,13 @@ game.hooks.remove = (id) => world.removeBuilding(id);
 game.hooks.clearWorld = () => { world.clearWorld(); selId = null; };
 game.hooks.onToast = (msg, type) => ui.toast(msg, type);
 game.hooks.onSound = (kind) => audio.play(kind);
+game.hooks.onRaid = (defended) => war.doRaid(defended);
 game.hooks.onWin = () => { gameOver = true; audio.play('win'); ui.showWin(); };
-game.hooks.onChange = () => { ui.refresh(); if (selId != null) ui.showSelection(game.buildingInfo(selId)); };
+game.hooks.onChange = () => {
+  ui.refresh();
+  war.syncGarrison(game.state.buildings, world.buildingWorldPos);
+  if (selId != null) ui.showSelection(game.buildingInfo(selId));
+};
 game.hooks.serializeRival = () => rival.serialize();
 game.hooks.restoreRival = (data, difficulty) => rival.restore(data, difficulty);
 
@@ -72,18 +80,22 @@ const ui = initUI({
       exitPlacing();
       game.reset();                       // resets player (keeps chosen difficulty)
       rival.reset(game.state.difficulty); // resets rival to match
+      war.reset();
+      war.syncGarrison(game.state.buildings, world.buildingWorldPos);
       started = true; gameOver = false; focusHome();
     }
   },
   onStart: (continueGame, difficulty) => {
     audio.resume();
+    war.reset();                          // clear any units from a prior game
     if (continueGame && game.hasSave()) {
-      game.load();                        // also restores the rival via hook
+      game.load();                        // restores rival + re-syncs garrison via onChange
     } else {
       game.startNew(difficulty);
       rival.reset(difficulty);
     }
     started = true; gameOver = false; focusHome();
+    war.syncGarrison(game.state.buildings, world.buildingWorldPos);
   },
   onViewRival: () => {
     viewingRival = !viewingRival;
@@ -111,6 +123,7 @@ ui.showIntro(game.hasSave());
 // ----- main loop -----
 function loop() {
   const dt = world.getDelta();
+  war.update(dt);            // drives unit animations + raid battles
   if (started && !gameOver) {
     game.tick(dt);
     rival.tick(dt);
@@ -118,6 +131,7 @@ function loop() {
     if (acc > 0.2) {
       acc = 0;
       ui.refresh();
+      war.syncVillagers(game.state.population);
       if (selId != null) ui.showSelection(game.buildingInfo(selId));
     }
   }

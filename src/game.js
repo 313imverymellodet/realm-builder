@@ -21,7 +21,7 @@ export const state = START();
 // Hooks set by main.js (bridge to world + ui + rival).
 export const hooks = {
   spawn: () => {}, swap: () => {}, remove: () => {}, clearWorld: () => {},
-  onToast: () => {}, onWin: () => {}, onChange: () => {}, onSound: () => {},
+  onToast: () => {}, onWin: () => {}, onChange: () => {}, onSound: () => {}, onRaid: () => {},
   serializeRival: () => null, restoreRival: () => {},
 };
 
@@ -186,7 +186,9 @@ export function tick(dt) {
     hooks.onSound('raid');
     const strength = 18 + 16 * state.raidCount;
     const m = might();
-    if (m >= strength) {
+    const defended = m >= strength;
+    hooks.onRaid(defended);
+    if (defended) {
       hooks.onToast(`🛡️ Raid #${state.raidCount} repelled! (Might ${Math.round(m)} vs ${strength})`, 'ok');
     } else {
       const frac = Math.min(0.5, (strength - m) / strength);
