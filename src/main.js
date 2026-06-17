@@ -5,18 +5,21 @@ import * as rival from './rival.js';
 import * as audio from './audio.js';
 import * as units from './units.js';
 import * as war from './war.js';
+import * as bits from './bits.js';
 import { initUI } from './ui.js';
-import { BUILDINGS, BUILD_ORDER, modelFor, footprintOf } from './buildings.js';
+import { BUILDINGS, BUILD_ORDER, modelFor, footprintOf, primaryResource } from './buildings.js';
 import { RIVAL_CENTER } from './config.js';
 
 const canvas = document.getElementById('app');
 world.initWorld(canvas);
 units.initUnits(world.getUnitsGroup());
+bits.initBits(world.getBitsGroup());
 
 let started = false;
 let gameOver = false;
 let selId = null;
 let acc = 0;
+let bitTimer = 0;
 let viewingRival = false;
 
 // ----- world -> game/ui -----
@@ -81,6 +84,7 @@ const ui = initUI({
       game.reset();                       // resets player (keeps chosen difficulty)
       rival.reset(game.state.difficulty); // resets rival to match
       war.reset();
+      bits.clearBits();
       war.syncGarrison(game.state.buildings, world.buildingWorldPos);
       started = true; gameOver = false; focusHome();
     }
@@ -88,6 +92,7 @@ const ui = initUI({
   onStart: (continueGame, difficulty) => {
     audio.resume();
     war.reset();                          // clear any units from a prior game
+    bits.clearBits();
     if (continueGame && game.hasSave()) {
       game.load();                        // restores rival + re-syncs garrison via onChange
     } else {
@@ -128,9 +133,11 @@ if (boot) { boot.classList.add('hide'); setTimeout(() => boot.remove(), 600); }
 function loop() {
   const dt = world.getDelta();
   war.update(dt);            // drives unit animations + raid battles
+  bits.update(dt);           // floating gather bits
   if (started && !gameOver) {
     game.tick(dt);
     rival.tick(dt);
+    pulseBits(dt);
     acc += dt;
     if (acc > 0.2) {
       acc = 0;
@@ -141,5 +148,19 @@ function loop() {
   }
   world.render(dt);
   requestAnimationFrame(loop);
+}
+
+// Periodically pop a resource bit above each producing building.
+function pulseBits(dt) {
+  bitTimer += dt;
+  if (bitTimer < 1.2) return;
+  bitTimer = 0;
+  if (game.efficiency() <= 0.05) return; // nothing's being produced
+  for (const b of game.state.buildings) {
+    const res = primaryResource(b.type);
+    if (!res || Math.random() < 0.3) continue; // stagger so they don't all pop in sync
+    const p = world.buildingWorldPos(b.id);
+    if (p) bits.spawnBit(res, p.x, p.z);
+  }
 }
 requestAnimationFrame(loop);

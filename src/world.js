@@ -10,10 +10,11 @@ let buildingsGroup, highlight;
 const occupied = new Map();   // "cx,cz" -> id
 const instances = new Map();  // id -> { group, footprint, cx, cz, cells, modelName, rot }
 
-let rivalGroup, decorGroup, unitsGroup;
+let rivalGroup, decorGroup, unitsGroup, bitsGroup;
 const rivalMap = new Map();    // key -> { group, modelName }
 
 export function getUnitsGroup() { return unitsGroup; }
+export function getBitsGroup() { return bitsGroup; }
 
 let ghost = null, ghostFootprint = 1, ghostRot = 0, placingType = null;
 let ghostState = { valid: false, cx: 0, cz: 0 };
@@ -141,6 +142,9 @@ export function initWorld(canvas) {
 
   unitsGroup = new THREE.Group();
   scene.add(unitsGroup);
+
+  bitsGroup = new THREE.Group();
+  scene.add(bitsGroup);
 
   buildingsGroup = new THREE.Group();
   scene.add(buildingsGroup);

@@ -129,6 +129,17 @@ export const BUILD_ORDER = [
 
 export function modelFor(type, age, level) { return BUILDINGS[type].model(age, level); }
 export function footprintOf(type) { return BUILDINGS[type].footprint; }
+
+// The resource a building mainly outputs (for gather-bit visuals), or null.
+export function primaryResource(type) {
+  const d = BUILDINGS[type];
+  if (!d.produce) return null;
+  const p = d.produce(1);
+  let best = null, max = 0;
+  for (const k in p) if (p[k] > max) { max = p[k]; best = k; }
+  return best;
+}
+
 export function costToString(cost) {
   const e = Object.entries(cost || {});
   if (!e.length) return 'free';
