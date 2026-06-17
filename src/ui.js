@@ -59,15 +59,31 @@ function wireButtons() {
   $('#sel-demolish').addEventListener('click', () => { if (selectedId != null) handlers.onDemolish(selectedId); });
 }
 
-// ---------- rival race panel ----------
+// ---------- race panel (you vs rival) ----------
 export function updateRival(p) {
   $('#rp-fill').style.width = Math.round(p.pct * 100) + '%';
-  let status;
-  if (p.wonderLevel >= 3) status = '🏆 Wonder complete';
-  else if (p.wonderLevel > 0) status = `🏆 Building Wonder · Lv ${p.wonderLevel}/3`;
-  else status = `${p.age >= 2 ? 'Age II' : 'Age I'} · ${p.builds} building${p.builds === 1 ? '' : 's'}`;
-  $('#rp-status').textContent = status;
-  $('#rivalpanel').classList.toggle('danger', p.wonderLevel > 0);
+  const danger = p.wonderLevel > 0;
+  $('#racepanel').classList.toggle('danger', danger);
+  $('#rp-fill').parentElement.title = danger
+    ? `Rival is building its Wonder — Level ${p.wonderLevel}/3!`
+    : `Rival: ${p.age >= 2 ? 'Age II' : 'Age I'}, ${p.builds} buildings`;
+}
+
+const fmtTime = (s) => { s = Math.max(0, Math.floor(s)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
+
+// What the player should do next, plus a 0..1 progress estimate toward the Wonder.
+function playerProgress() {
+  const s = game.state;
+  const has = (t) => s.buildings.some((b) => b.type === t);
+  if (s.won) return { pct: 1, text: '🏆 Wonder complete — victory!' };
+  const wonder = s.buildings.find((b) => b.type === 'wonder');
+  if (wonder) return { pct: Math.min(1, 0.6 + wonder.level * 0.134), text: `Upgrade your 🏆 Wonder to Level 3 (now ${wonder.level})` };
+  if (s.age >= 2) return { pct: 0.55, text: 'Build your 🏆 Wonder!' };
+  if (game.canAdvanceAge()) return { pct: 0.48, text: '⚜️ Advance to the Second Age!' };
+  if (!has('lumber') || !has('farm')) return { pct: 0.12, text: 'Build a 🪵 Lumber Camp and 🌾 Farm' };
+  if (!has('temple')) return { pct: 0.3, text: 'Build a ✨ Temple to unlock the Age' };
+  if (s.population < game.AGE2_POP) return { pct: 0.4, text: `Grow to ${game.AGE2_POP} population — now ${Math.floor(s.population)}` };
+  return { pct: 0.45, text: 'Save up, then ⚜️ Advance the Age' };
 }
 
 export function refresh() {
@@ -86,6 +102,7 @@ export function refresh() {
     rEl.textContent = (rate >= 0 ? '+' : '') + rate.toFixed(1);
     rEl.className = 'rate ' + (rate >= -0.001 ? 'pos' : 'neg');
     el.classList.toggle('full', game.state.res[k] >= c[k] - 0.5);
+    el.classList.toggle('low', k === 'food' && rate < -0.05); // starvation warning
   }
 
   const pop = document.getElementById('res-pop');
@@ -115,6 +132,36 @@ export function refresh() {
     ageBtn.disabled = !game.canAdvanceAge();
     ageBtn.title = `Advance to the Second Age — needs a Temple, ${game.AGE2_POP} population, and ${costToString(game.AGE2_COST)}`;
   }
+
+  // race panel: your objective + progress + elapsed time
+  const prog = playerProgress();
+  $('#you-fill').style.width = Math.round(prog.pct * 100) + '%';
+  $('#quest-text').textContent = prog.text;
+  $('#rp-clock').textContent = fmtTime(game.state.tElapsed);
+}
+
+// The stat gained by upgrading this building one level (for the selection panel).
+function upgradePreview(type, level) {
+  const d = BUILDINGS[type];
+  if (level >= d.maxLevel) return '';
+  const cur = level, nxt = level + 1, out = [];
+  if (d.produce) { const a = d.produce(cur), b = d.produce(nxt); for (const k in b) out.push(`+${(b[k] - a[k]).toFixed(1)} ${RES_ICON[k]}/s`); }
+  if (d.popCap) out.push(`+${d.popCap(nxt) - d.popCap(cur)} 👥`);
+  if (d.capBonus) out.push(`+${d.capBonus(nxt) - d.capBonus(cur)} storage`);
+  if (d.might) out.push(`+${d.might(nxt) - d.might(cur)} ⚔️`);
+  if (d.happiness) out.push(`+${d.happiness(nxt) - d.happiness(cur)} ✨`);
+  return out.join(', ');
+}
+
+function gameStats() {
+  const s = game.state;
+  const rows = [
+    [fmtTime(s.tElapsed), 'Time'],
+    [s.buildings.length, 'Buildings'],
+    [s.raidCount, 'Raids'],
+    [s.difficulty[0].toUpperCase() + s.difficulty.slice(1), 'Difficulty'],
+  ];
+  return `<div class="endstats">${rows.map(([v, l]) => `<div><b>${v}</b><span>${l}</span></div>`).join('')}</div>`;
 }
 
 export function showSelection(info) {
@@ -124,11 +171,14 @@ export function showSelection(info) {
   $('#sel-icon').textContent = info.icon;
   $('#sel-name').textContent = info.name;
   $('#sel-level').textContent = `Level ${info.level} / ${info.maxLevel}`;
-  $('#sel-stats').innerHTML = info.lines.map((l) => `<div>${l}</div>`).join('');
+  const preview = upgradePreview(info.type, info.level);
+  $('#sel-stats').innerHTML =
+    info.lines.map((l) => `<div>${l}</div>`).join('') +
+    (preview ? `<div class="sel-next">▲ Next level: ${preview}</div>` : '');
 
   const upBtn = $('#sel-upgrade');
   if (info.level >= info.maxLevel) {
-    upBtn.innerHTML = 'Max Level';
+    upBtn.innerHTML = '★ Max Level';
     upBtn.disabled = true;
   } else {
     const cost = game.upgradeCostOf(info.building);
@@ -164,6 +214,7 @@ export function showWin() {
   showModal(
     `<h1>🏆 Your Wonder is Complete!</h1>
      <p>You beat your rival to the Wonder and crowned a realm for the ages. Masterfully done.</p>
+     ${gameStats()}
      <div class="m-btns"><button class="big" id="m-again">Build a New Realm</button></div>`
   );
   $('#m-again').addEventListener('click', () => { hideModal(); handlers.onReset(); });
@@ -173,6 +224,7 @@ export function showDefeat() {
   showModal(
     `<h1>💀 Your Rival Won the Race</h1>
      <p>The rival realm completed its Wonder before you did. Grow faster, defend smarter, and try again.</p>
+     ${gameStats()}
      <div class="m-btns"><button class="big" id="m-again">Try Again</button></div>`
   );
   $('#m-again').addEventListener('click', () => { hideModal(); handlers.onReset(); });

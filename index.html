@@ -4,8 +4,31 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Realm Builder</title>
+    <style>
+      /* Instant cold-start splash (before the JS/CSS bundle loads) */
+      #boot {
+        position: fixed; inset: 0; z-index: 100; display: flex;
+        flex-direction: column; align-items: center; justify-content: center; gap: 22px;
+        background: radial-gradient(circle at 50% 38%, #2c2620, #15110d 75%);
+        font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+        transition: opacity .5s ease; color: #ffd36b;
+      }
+      #boot.hide { opacity: 0; pointer-events: none; }
+      #boot .crest { font-size: 64px; animation: bob 2.4s ease-in-out infinite; }
+      #boot h1 { font-size: 30px; letter-spacing: .5px; }
+      #boot .sub { color: #b3a187; font-size: 13px; margin-top: -12px; }
+      #boot .ring { width: 38px; height: 38px; border-radius: 50%; border: 3px solid rgba(255,211,107,.2); border-top-color: #ffd36b; animation: spin 1s linear infinite; }
+      @keyframes spin { to { transform: rotate(360deg); } }
+      @keyframes bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
+    </style>
   </head>
   <body>
+    <div id="boot">
+      <div class="crest">🏰</div>
+      <h1>Realm Builder</h1>
+      <div class="sub">Raising your realm…</div>
+      <div class="ring"></div>
+    </div>
     <canvas id="app"></canvas>
 
     <!-- Top resource bar -->
@@ -19,11 +42,22 @@
       </div>
     </div>
 
-    <!-- Rival race panel -->
-    <aside id="rivalpanel">
-      <div class="rp-head"><span>⚔️ Rival Realm</span><button id="btn-rival" class="rp-view">👁 View</button></div>
-      <div class="rp-bar"><div id="rp-fill"></div></div>
-      <div id="rp-status" class="rp-status">Scouting…</div>
+    <!-- Race panel: you vs rival + live objective -->
+    <aside id="racepanel">
+      <div class="rp-head">
+        <span>⚔️ Race to the Wonder</span>
+        <span id="rp-clock" class="rp-clock">0:00</span>
+      </div>
+      <div class="race-row">
+        <span class="race-lbl you">👑 You</span>
+        <div class="rp-bar"><div id="you-fill" class="you-fill"></div></div>
+      </div>
+      <div class="race-row">
+        <span class="race-lbl rival">💀 Rival</span>
+        <div class="rp-bar"><div id="rp-fill"></div></div>
+        <button id="btn-rival" class="rp-view" title="Fly to the rival realm">👁</button>
+      </div>
+      <div id="quest" class="quest">🎯 <span id="quest-text">Grow your settlement</span></div>
     </aside>
 
     <!-- Selection panel -->

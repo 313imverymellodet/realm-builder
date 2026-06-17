@@ -120,6 +120,10 @@ window.addEventListener('keydown', (e) => {
 
 ui.showIntro(game.hasSave());
 
+// dismiss the cold-start splash now that the UI is up
+const boot = document.getElementById('boot');
+if (boot) { boot.classList.add('hide'); setTimeout(() => boot.remove(), 600); }
+
 // ----- main loop -----
 function loop() {
   const dt = world.getDelta();
