@@ -21,7 +21,7 @@ export const state = START();
 // Hooks set by main.js (bridge to world + ui + rival).
 export const hooks = {
   spawn: () => {}, swap: () => {}, remove: () => {}, clearWorld: () => {},
-  onToast: () => {}, onWin: () => {}, onChange: () => {},
+  onToast: () => {}, onWin: () => {}, onChange: () => {}, onSound: () => {},
   serializeRival: () => null, restoreRival: () => {},
 };
 
@@ -129,15 +129,16 @@ export function canAdvanceAge() {
   return hasTemple && state.population >= AGE2_POP && canAfford(AGE2_COST);
 }
 export function advanceAge() {
-  if (state.age >= 2) return;
-  if (!state.buildings.some((b) => b.type === 'temple')) { hooks.onToast('Build a Temple to advance the Age', 'warn'); return; }
-  if (state.population < AGE2_POP) { hooks.onToast(`Need ${AGE2_POP} population to advance the Age`, 'warn'); return; }
-  if (!canAfford(AGE2_COST)) { hooks.onToast('Not enough resources to advance the Age', 'warn'); return; }
+  if (state.age >= 2) return false;
+  if (!state.buildings.some((b) => b.type === 'temple')) { hooks.onToast('Build a Temple to advance the Age', 'warn'); return false; }
+  if (state.population < AGE2_POP) { hooks.onToast(`Need ${AGE2_POP} population to advance the Age`, 'warn'); return false; }
+  if (!canAfford(AGE2_COST)) { hooks.onToast('Not enough resources to advance the Age', 'warn'); return false; }
   pay(AGE2_COST);
   state.age = 2;
   for (const b of state.buildings) hooks.swap(b.id, modelFor(b.type, 2, b.level));
   hooks.onToast('⚜️ Welcome to the Second Age — the Wonder is now available!', 'ok');
   hooks.onChange();
+  return true;
 }
 
 // ---------- per-frame economy ----------
@@ -182,6 +183,7 @@ export function tick(dt) {
   }
   if (state.tElapsed > state.nextRaid) {
     state.raidCount++;
+    hooks.onSound('raid');
     const strength = 18 + 16 * state.raidCount;
     const m = might();
     if (m >= strength) {

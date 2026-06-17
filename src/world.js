@@ -10,7 +10,7 @@ let buildingsGroup, highlight;
 const occupied = new Map();   // "cx,cz" -> id
 const instances = new Map();  // id -> { group, footprint, cx, cz, cells, modelName, rot }
 
-let rivalGroup;
+let rivalGroup, decorGroup;
 const rivalMap = new Map();    // key -> { group, modelName }
 
 let ghost = null, ghostFootprint = 1, ghostRot = 0, placingType = null;
@@ -19,6 +19,21 @@ let ghostState = { valid: false, cx: 0, cz: 0 };
 // Camera focus tween (used to fly between your realm and the rival's).
 let focusStart = null, focusGoal = null, focusT = 1;
 const camOffset = new THREE.Vector3();
+
+// Per-frame animators: fn(dt, elapsed) -> true when finished. Drives the
+// "pop-in" of placed buildings and the river's surface waves.
+const animators = [];
+let elapsed = 0;
+const easeOutBack = (t) => 1 + 2.70158 * Math.pow(t - 1, 3) + 1.70158 * Math.pow(t - 1, 2);
+function popIn(obj, dur = 0.4) {
+  obj.scale.setScalar(0.001);
+  let t = 0;
+  animators.push((dt) => {
+    t = Math.min(1, t + dt / dur);
+    obj.scale.setScalar(Math.max(0.001, easeOutBack(t)));
+    return t >= 1;
+  });
+}
 
 // Hooks set by main.js
 export const hooks = {
@@ -94,17 +109,33 @@ export function initWorld(canvas) {
   rivalGround.receiveShadow = true;
   scene.add(rivalGround);
 
-  // ---- river separating the two realms ----
+  // ---- animated river separating the two realms ----
   const river = new THREE.Mesh(
-    new THREE.PlaneGeometry(420, 34),
-    new THREE.MeshStandardMaterial({ color: '#3f86c4', metalness: 0.1, roughness: 0.4, transparent: true, opacity: 0.9 })
+    new THREE.PlaneGeometry(440, 38, 80, 14),
+    new THREE.MeshStandardMaterial({ color: '#3f86c4', metalness: 0.2, roughness: 0.35, transparent: true, opacity: 0.92, flatShading: true })
   );
   river.rotation.x = -Math.PI / 2;
   river.position.set(0, -0.04, -80);
   scene.add(river);
+  // gentle surface waves (local z maps to world height after the rotation)
+  const rpos = river.geometry.attributes.position;
+  const baseXY = [];
+  for (let i = 0; i < rpos.count; i++) baseXY.push([rpos.getX(i), rpos.getY(i)]);
+  animators.push((dt, t) => {
+    for (let i = 0; i < rpos.count; i++) {
+      const [x, y] = baseXY[i];
+      rpos.setZ(i, 0.55 * Math.sin(x * 0.08 + t * 1.6) * Math.cos(y * 0.16 + t * 1.1));
+    }
+    rpos.needsUpdate = true;
+    return false; // runs forever
+  });
 
   rivalGroup = new THREE.Group();
   scene.add(rivalGroup);
+
+  decorGroup = new THREE.Group();
+  scene.add(decorGroup);
+  scatterDecor();
 
   buildingsGroup = new THREE.Group();
   scene.add(buildingsGroup);
@@ -213,6 +244,7 @@ export async function spawnBuilding(id, modelName, footprint, cx, cz, rot = 0) {
   inst.userData.buildingId = id;
   rec.group = inst;
   buildingsGroup.add(inst);
+  popIn(inst);
 }
 
 export async function swapBuilding(id, modelName) {
@@ -230,6 +262,7 @@ export async function swapBuilding(id, modelName) {
   if (rec2.group) buildingsGroup.remove(rec2.group);
   rec2.group = inst;
   buildingsGroup.add(inst);
+  popIn(inst);
 }
 
 export function removeBuilding(id) {
@@ -261,6 +294,7 @@ export async function spawnRival(rkey, modelName, size, x, z) {
   if (cur.group) rivalGroup.remove(cur.group);
   cur.group = inst;
   rivalGroup.add(inst);
+  popIn(inst);
 }
 export function clearRival() {
   for (const [, rec] of rivalMap) if (rec.group) rivalGroup.remove(rec.group);
@@ -273,6 +307,38 @@ export function focusOn(x, z) {
   focusGoal = new THREE.Vector3(x, 0, z);
   camOffset.copy(camera.position).sub(controls.target);
   focusT = 0;
+}
+
+// ---------- decorative environment (one-time scatter of CC0 nature props) ----------
+async function scatterDecor() {
+  const TREES = ['Resource_Tree1', 'Resource_Tree2', 'Resource_PineTree', 'Resource_PineTree_Group', 'Resource_Tree_Group'];
+  const ROCKS = ['Rock', 'Rock_Group', 'Resource_Rock_1', 'Resource_Rock_2'];
+  const MTNS = ['Mountain_Single', 'Mountain_Group_1', 'Mountain_Group_2', 'MountainLarge_Single'];
+  const half = GRID_N * CELL / 2; // player build area half-extent
+  const inPlayer = (x, z) => Math.abs(x) < half + 5 && Math.abs(z) < half + 5;
+  const inRival = (x, z) => Math.abs(x - RIVAL_CENTER.x) < 64 && Math.abs(z - RIVAL_CENTER.z) < 64;
+  const inRiver = (z) => Math.abs(z + 80) < 22;
+  const valid = (x, z) => !inPlayer(x, z) && !inRival(x, z) && !inRiver(z);
+
+  const place = async (pool, size, x, z) => {
+    const name = pool[(Math.random() * pool.length) | 0];
+    try {
+      const inst = await makeInstance(name, size * (0.8 + Math.random() * 0.5));
+      inst.position.set(x, 0, z);
+      inst.rotation.y = Math.random() * Math.PI * 2;
+      decorGroup.add(inst);
+    } catch { /* skip a missing decoration */ }
+  };
+
+  for (let i = 0; i < 60; i++) {
+    let x = 0, z = 0, ok = false, tries = 0;
+    while (!ok && tries++ < 20) { x = (Math.random() - 0.5) * 250; z = -230 + Math.random() * 340; ok = valid(x, z); }
+    if (ok) place(Math.random() < 0.7 ? TREES : ROCKS, Math.random() < 0.7 ? 5 : 4, x, z);
+  }
+  // mountains as a far backdrop ring
+  for (const [x, z] of [[-130, -150], [130, -150], [-150, -30], [150, -30], [-120, 70], [120, 70], [0, -255], [-90, -250], [90, -250], [0, 105]]) {
+    place(MTNS, 22, x + (Math.random() - 0.5) * 20, z + (Math.random() - 0.5) * 20);
+  }
 }
 
 // ---------- selection ----------
@@ -322,6 +388,10 @@ function setupInput() {
 
 // ---------- frame ----------
 export function render(dt = 0) {
+  elapsed += dt;
+  for (let i = animators.length - 1; i >= 0; i--) {
+    if (animators[i](dt, elapsed)) animators.splice(i, 1);
+  }
   if (focusGoal && focusT < 1) {
     focusT = Math.min(1, focusT + dt * 1.5);
     const e = focusT < 0.5 ? 2 * focusT * focusT : 1 - Math.pow(-2 * focusT + 2, 2) / 2; // easeInOut

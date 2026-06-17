@@ -30,14 +30,16 @@ function buildResourceBar() {
 function buildBuildBar() {
   const bar = $('#buildbar');
   bar.innerHTML = '';
-  BUILD_ORDER.forEach((type) => {
+  BUILD_ORDER.forEach((type, i) => {
     const def = BUILDINGS[type];
+    const key = i < 9 ? String(i + 1) : i === 9 ? '0' : '';
     const card = document.createElement('button');
     card.className = 'card';
     card.dataset.type = type;
     card.title = def.desc;
     card.innerHTML =
-      `<div class="card-ic">${def.icon}</div>
+      `${key ? `<span class="card-key">${key}</span>` : ''}
+       <div class="card-ic">${def.icon}</div>
        <div class="card-name">${def.name}</div>
        <div class="card-cost">${costToString(def.buildCost)}</div>`;
     card.addEventListener('click', () => handlers.onBuild(type));
@@ -51,6 +53,7 @@ function wireButtons() {
   $('#btn-save').addEventListener('click', () => handlers.onSave());
   $('#btn-reset').addEventListener('click', () => handlers.onReset());
   $('#btn-rival').addEventListener('click', () => handlers.onViewRival());
+  $('#btn-mute').addEventListener('click', () => { $('#btn-mute').textContent = handlers.onToggleMute() ? '🔇' : '🔊'; });
   $('#sel-close').addEventListener('click', () => handlers.onCloseSel());
   $('#sel-upgrade').addEventListener('click', () => { if (selectedId != null) handlers.onUpgrade(selectedId); });
   $('#sel-demolish').addEventListener('click', () => { if (selectedId != null) handlers.onDemolish(selectedId); });
